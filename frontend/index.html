@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ProcureIQ — Automated Vendor Price Discovery</title>
+<style>
+  :root {
+    --blue:   #2563eb;
+    --blue-d: #1d4ed8;
+    --green:  #16a34a;
+    --red:    #dc2626;
+    --gray:   #f3f4f6;
+    --border: #e5e7eb;
+    --text:   #111827;
+    --muted:  #6b7280;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #f9fafb; color: var(--text); min-height: 100vh; }
+
+  /* ── Header ── */
+  header { background: white; border-bottom: 1px solid var(--border);
+           padding: 0 1rem; display: flex; align-items: center; gap: 0.75rem;
+           height: 56px; flex-wrap: wrap; }
+  .logo  { font-size: 1.2rem; font-weight: 700; color: var(--blue); white-space: nowrap; }
+  .logo span { color: var(--text); }
+  .tagline { font-size: 0.75rem; color: var(--muted); line-height: 1.3; }
+
+  @media (max-width: 480px) {
+    header { height: auto; padding: 0.6rem 1rem; }
+    .tagline { display: none; }
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  .grid-2 { display: grid; grid-template-columns: 360px 1fr; gap: 1.5rem; align-items: start; }
+
+  @media (max-width: 820px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .container { margin: 1rem auto; }
+  }
+
+  /* ── Card ── */
+  .card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+  .card-title { font-weight: 600; font-size: 1rem; margin-bottom: 1.25rem;
+                display: flex; align-items: center; gap: 0.5rem; }
+
+  /* ── Form ── */
+  label { display: block; font-size: 0.82rem; font-weight: 500;
+          color: var(--muted); margin-bottom: 0.35rem; }
+  input, textarea, select {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.55rem 0.75rem; font-size: 0.9rem; outline: none;
+    transition: border-color .15s;
+  }
+  input:focus, textarea:focus { border-color: var(--blue); }
+  .field { margin-bottom: 1rem; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+  @media (max-width: 480px) {
+    .row-2 { grid-template-columns: 1fr; }
+  }
+
+  /* Vendor tags */
+  #vendor-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; min-height: 32px; }
+  .tag { background: #eff6ff; color: var(--blue); border: 1px solid #bfdbfe;
+         border-radius: 20px; padding: 0.2rem 0.75rem; font-size: 0.8rem;
+         display: flex; align-items: center; gap: 0.4rem; }
+  .tag button { background: none; border: none; cursor: pointer; color: var(--blue);
+                font-size: 1rem; line-height: 1; padding: 0; }
+  .vendor-row { display: flex; gap: 0.5rem; }
+  .vendor-row input { flex: 1; }
+
+  /* Preset buttons */
+  .presets { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+  .preset-btn { background: var(--gray); border: 1px solid var(--border); border-radius: 6px;
+                padding: 0.3rem 0.65rem; font-size: 0.75rem; cursor: pointer; }
+  .preset-btn:hover { background: #e5e7eb; }
+
+  /* ── Button ── */
+  .btn { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--blue);
+         color: white; border: none; border-radius: 8px; padding: 0.65rem 1.25rem;
+         font-size: 0.9rem; font-weight: 500; cursor: pointer; width: 100%;
+         justify-content: center; transition: background .15s; }
+  .btn:hover { background: var(--blue-d); }
+  .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  .btn-sm { width: auto; padding: 0.4rem 0.85rem; font-size: 0.8rem; border-radius: 6px; }
+  .btn-green { background: var(--green); }
+  .btn-green:hover { background: #15803d; }
+  .btn-ghost { background: white; color: var(--blue); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--gray); }
+
+  /* ── Results ── */
+  .status-bar { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;
+                padding: 0.75rem 1rem; border-radius: 8px; background: #eff6ff; font-size: 0.85rem; }
+  .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--blue);
+           animation: pulse 1.2s infinite; flex-shrink: 0; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+  .done-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+
+  /* Quote grid */
+  .quotes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+
+  @media (max-width: 480px) {
+    .quotes-grid { grid-template-columns: 1fr; }
+  }
+  .quote-card { border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem;
+                background: white; display: flex; flex-direction: column; gap: 0.5rem; }
+  .quote-card.best { border-color: var(--green); background: #f0fdf4; }
+  .quote-card.error { border-color: #fca5a5; background: #fff7f7; opacity: .75; }
+  .q-vendor { font-weight: 600; font-size: 0.9rem; }
+  .q-price  { font-size: 1.4rem; font-weight: 700; color: var(--blue); }
+  .q-best   { font-size: 0.7rem; font-weight: 600; color: var(--green);
+              background: #dcfce7; padding: 0.15rem 0.5rem; border-radius: 20px; width: fit-content; }
+  .q-meta   { font-size: 0.8rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.2rem; }
+  .q-meta span { display: flex; gap: 0.4rem; align-items: center; }
+  .q-note   { font-size: 0.75rem; color: var(--muted); font-style: italic; }
+  .q-err    { font-size: 0.8rem; color: var(--red); }
+
+  /* Comparison table */
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 500px; }
+  .compare-table th { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 2px solid var(--border);
+                      font-weight: 600; color: var(--muted); font-size: 0.78rem; text-transform: uppercase;
+                      white-space: nowrap; }
+  .compare-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+  .compare-table tr:last-child td { border-bottom: none; }
+  .compare-table tr:hover td { background: #f9fafb; }
+  .badge-best { background: #dcfce7; color: var(--green); padding: 0.15rem 0.5rem;
+                border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+
+  /* RFQ modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5);
+                   display: none; align-items: center; justify-content: center; z-index: 100;
+                   padding: 1rem; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: white; border-radius: 14px; padding: 1.5rem; width: 480px;
+           max-width: 100%; max-height: 92vh; overflow-y: auto; }
+  .modal-title { font-weight: 700; font-size: 1.05rem; margin-bottom: 1.25rem; }
+  .modal-actions { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
+  .modal-actions .btn { flex: 1; min-width: 140px; }
+
+  /* History sidebar */
+  .history-item { display: flex; justify-content: space-between; align-items: center;
+                  padding: 0.65rem 0; border-bottom: 1px solid var(--border);
+                  cursor: pointer; font-size: 0.85rem; }
+  .history-item:hover .h-product { text-decoration: underline; }
+  .history-item:last-child { border: none; }
+  .h-product { font-weight: 500; }
+  .h-meta { font-size: 0.75rem; color: var(--muted); }
+  .badge { padding: 0.15rem 0.55rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+  .badge-run  { background: #dbeafe; color: var(--blue); }
+  .badge-done { background: #dcfce7; color: var(--green); }
+
+  /* Tab bar */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1.25rem; gap: 0; }
+  .tab  { padding: 0.6rem 1rem; font-size: 0.85rem; cursor: pointer;
+          border-bottom: 2px solid transparent; color: var(--muted); }
+  .tab.active { border-color: var(--blue); color: var(--blue); font-weight: 600; }
+
+  .empty { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 2rem; }
+  .inline-error { background: #fff1f2; border: 1px solid #fca5a5; color: var(--red);
+                  border-radius: 8px; padding: 0.65rem 1rem; font-size: 0.85rem; margin-bottom: 0.75rem; }
+
+  /* Agent log */
+  .agent-log { background: #1e1e2e; color: #a6e3a1; border-radius: 8px; padding: 1rem;
+               font-family: monospace; font-size: 0.78rem; max-height: 180px; overflow-y: auto;
+               margin-bottom: 1rem; }
+  .agent-log .log-line { margin: 0.15rem 0; }
+  .log-vendor { color: #89b4fa; }
+  .log-progress { color: #cdd6f4; }
+  .log-done { color: #a6e3a1; }
+  .log-error { color: #f38ba8; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Procure<span>IQ</span></div>
+  <div class="tagline">Automated multi-vendor price discovery powered by TinyFish Web Agent</div>
+</header>
+
+<div class="container">
+  <div class="grid-2">
+
+    <!-- ── LEFT: Search Form ── -->
+    <div>
+      <div class="card">
+        <div class="card-title">🔍 New Price Search</div>
+
+        <div class="field">
+          <label>Product / Service *</label>
+          <input id="product" placeholder="e.g. 1TB NVMe SSD, Allen Bradley PLC, Office 365 E3" />
+        </div>
+
+        <div class="row-2">
+          <div class="field">
+            <label>Quantity</label>
+            <input id="quantity" type="number" value="10" min="1"/>
+          </div>
+          <div class="field">
+            <label>Specs / Requirements</label>
+            <input id="specs" placeholder="e.g. M.2 2280, PCIe 4.0"/>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Vendor Websites</label>
+          <div class="presets">
+            <span style="font-size:0.75rem;color:var(--muted);margin-right:2px">Quick add:</span>
+            <button class="preset-btn" onclick="addVendor('https://www.grainger.com')">Grainger</button>
+            <button class="preset-btn" onclick="addVendor('https://www.mcmaster.com')">McMaster</button>
+            <button class="preset-btn" onclick="addVendor('https://www.amazon.com')">Amazon</button>
+            <button class="preset-btn" onclick="addVendor('https://www.alibaba.com')">Alibaba</button>
+            <button class="preset-btn" onclick="addVendor('https://www.newegg.com')">Newegg</button>
+            <button class="preset-btn" onclick="addVendor('https://www.cdw.com')">CDW</button>
+            <button class="preset-btn" onclick="addVendor('https://www.bhphotovideo.com')">B&H</button>
+            <button class="preset-btn" onclick="addVendor('https://www.indiamart.com')">IndiaMart</button>
+            <button class="preset-btn" onclick="addVendor('https://www.flipkart.com')">Flipkart</button>
+          </div>
+          <div id="vendor-tags"></div>
+          <div class="vendor-row">
+            <input id="vendor-input" placeholder="https://vendor-website.com"
+                   onkeydown="if(event.key==='Enter'){addVendorFromInput();event.preventDefault();}"/>
+            <button class="btn btn-ghost btn-sm" onclick="addVendorFromInput()">Add</button>
+          </div>
+        </div>
+
+        <button class="btn" id="search-btn" onclick="startSearch()">
+          🚀 Start Price Discovery
+        </button>
+      </div>
+
+      <!-- History -->
+      <div class="card" style="margin-top:1rem">
+        <div class="card-title">📋 Recent Searches</div>
+        <div id="history-list"><div class="empty">No searches yet</div></div>
+      </div>
+    </div>
+
+    <!-- ── RIGHT: Results ── -->
+    <div>
+      <div class="card" id="results-panel">
+        <div class="empty" style="padding:3rem">
+          Start a search to see vendor quotes appear in real time
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── RFQ Modal ── -->
+<div class="modal-overlay" id="rfq-modal">
+  <div class="modal">
+    <div class="modal-title">📨 Submit RFQ to Vendor</div>
+    <input type="hidden" id="rfq-quote-id"/>
+    <div class="field"><label>Your Name</label><input id="rfq-name" placeholder="Jane Smith"/></div>
+    <div class="field"><label>Email</label><input id="rfq-email" type="email" placeholder="jane@company.com"/></div>
+    <div class="field"><label>Company</label><input id="rfq-company" placeholder="Acme Corp"/></div>
+    <div class="field"><label>Additional Message (optional)</label>
+      <textarea id="rfq-message" rows="3" placeholder="Any specific requirements, delivery address, payment terms..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-green" id="rfq-submit-btn" onclick="submitRFQ()">Submit RFQ via Web Agent</button>
+      <button class="btn btn-ghost" onclick="closeRFQ()">Cancel</button>
+    </div>
+    <div id="rfq-result" style="margin-top:1rem;font-size:0.85rem"></div>
+  </div>
+</div>
+
+<script>
+const API = '';   // same origin
+const MAX_VENDORS = 10;
+const MAX_POLL_ATTEMPTS = 200;  // 200 × 3s = 10 min hard stop
+let vendors = [];
+let currentSearchId = null;
+let pollingTimer = null;
+let pollInFlight = false;
+let pollAttempts = 0;
+let rfqToastTimer = null;   // module-level so it can be cleared on unload
+
+window.addEventListener('beforeunload', () => {
+  if (pollingTimer) clearInterval(pollingTimer);
+  if (rfqToastTimer) clearInterval(rfqToastTimer);
+});
+
+// ── Vendor Tag Management ──────────────────────────────────────────────────
+function addVendor(url) {
+  url = url.trim();
+  if (!url) return;
+  if (!url.startsWith('http')) url = 'https://' + url;
+  if (vendors.includes(url)) return;
+  if (vendors.length >= MAX_VENDORS) {
+    showInlineError(`Maximum ${MAX_VENDORS} vendors per search`);
+    return;
+  }
+  vendors.push(url);
+  renderTags();
+}
+function addVendorFromInput() {
+  const v = document.getElementById('vendor-input');
+  addVendor(v.value);
+  v.value = '';
+}
+function removeVendor(url) {
+  vendors = vendors.filter(v => v !== url);
+  renderTags();
+}
+function renderTags() {
+  const el = document.getElementById('vendor-tags');
+  // Use data-url attribute to avoid XSS via inline onclick with raw URLs
+  el.innerHTML = vendors.map(v => {
+    const label = escHtml(v.replace(/^https?:\/\/(www\.)?/,'').split('/')[0]);
+    return `<span class="tag">${label}<button class="tag-remove" data-url="${escHtml(v)}" title="Remove">×</button></span>`;
+  }).join('');
+  el.querySelectorAll('.tag-remove').forEach(btn => {
+    btn.addEventListener('click', () => removeVendor(btn.dataset.url));
+  });
+}
+
+// ── Start Search ───────────────────────────────────────────────────────────
+async function startSearch() {
+  const product = document.getElementById('product').value.trim();
+  const quantity = parseInt(document.getElementById('quantity').value) || 1;
+  const specs = document.getElementById('specs').value.trim();
+
+  if (!product) { showInlineError('Please enter a product name'); return; }
+  if (vendors.length === 0) { showInlineError('Please add at least one vendor'); return; }
+
+  const btn = document.getElementById('search-btn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Running agents...';
+
+  showResultsRunning(product, vendors.length);
+
+  try {
+    const res = await fetch(`${API}/api/searches`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ product, quantity, specs, vendors })
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Server error ${res.status}: ${txt.substring(0,120)}`);
+    }
+    const data = await res.json();
+    currentSearchId = data.search_id;
+    pollResults(currentSearchId);
+    loadHistory();
+  } catch(e) {
+    showInlineError(e.message);
+    btn.disabled = false;
+    btn.innerHTML = '🚀 Start Price Discovery';
+  }
+}
+
+// ── Polling ────────────────────────────────────────────────────────────────
+function pollResults(searchId) {
+  if (pollingTimer) clearInterval(pollingTimer);
+  pollInFlight = false;
+  pollAttempts = 0;
+
+  pollingTimer = setInterval(async () => {
+    // Prevent overlapping fetches if network is slow
+    if (pollInFlight) return;
+    pollAttempts++;
+
+    // Hard timeout — force-complete after MAX_POLL_ATTEMPTS
+    if (pollAttempts > MAX_POLL_ATTEMPTS) {
+      clearInterval(pollingTimer);
+      const btn = document.getElementById('search-btn');
+      btn.disabled = false;
+      btn.innerHTML = '🚀 Start Price Discovery';
+      const panel = document.getElementById('results-panel');
+      if (panel) {
+        const bar = panel.querySelector('.status-bar');
+        if (bar) bar.innerHTML = `<div class="done-dot" style="background:var(--red)"></div>
+          <span style="color:var(--red)">Search timed out — partial results shown above</span>`;
+      }
+      return;
+    }
+
+    pollInFlight = true;
+    try {
+      const data = await fetchSearch(searchId);
+      if (!data) return;
+      renderResults(data);
+      if (data.status === 'complete') {
+        clearInterval(pollingTimer);
+        const btn = document.getElementById('search-btn');
+        btn.disabled = false;
+        btn.innerHTML = '🚀 Start Price Discovery';
+      }
+    } finally {
+      pollInFlight = false;
+    }
+  }, 3000);
+}
+
+async function fetchSearch(searchId) {
+  try {
+    const r = await fetch(`${API}/api/searches/${searchId}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch(e) { return null; }
+}
+
+// ── Render Results ─────────────────────────────────────────────────────────
+function showResultsRunning(product, vendorCount) {
+  document.getElementById('results-panel').innerHTML = `
+    <div class="card-title">📦 ${escHtml(product)}</div>
+    <div class="status-bar">
+      <div class="pulse"></div>
+      <span>Agents searching <b>${vendorCount} vendor${vendorCount>1?'s':''}</b> — quotes appear as they arrive</span>
+    </div>
+    <div class="agent-log" id="agent-log"><div class="log-line log-vendor">▶ Agents launching...</div></div>
+    <div id="quotes-area"><div class="empty">Fetching quotes...</div></div>
+  `;
+}
+
+function renderResults(data) {
+  const panel = document.getElementById('results-panel');
+  if (!panel) return;
+
+  const quotes = data.quotes || [];
+  const isDone = data.status === 'complete';
+
+  // Find best price — only compare same-currency quotes to avoid USD vs INR confusion
+  let bestPrice = Infinity, bestId = null;
+  const usdQuotes = quotes.filter(q => !q.currency || q.currency.toLowerCase() === 'usd');
+  const compareSet = usdQuotes.length > 0 ? usdQuotes : quotes;
+  compareSet.forEach(q => {
+    if (!q.unit_price || typeof q.unit_price !== 'string') return;
+    const num = parseFloat(q.unit_price.replace(/[^0-9.]/g, ''));
+    if (!isNaN(num) && num > 0 && num < bestPrice) { bestPrice = num; bestId = q.id; }
+  });
+
+  const currencies = [...new Set(quotes.filter(q => q.currency).map(q => q.currency.toUpperCase()))];
+  const multiCurrency = currencies.length > 1;
+  const doneCount = quotes.filter(q => q.notes !== 'searching...').length;
+
+  const statusHtml = isDone
+    ? `<div class="status-bar" style="background:#f0fdf4;color:#15803d">
+         <div class="done-dot"></div>
+         <span>Search complete — <b>${doneCount} quote${doneCount!==1?'s':''}</b> received from ${quotes.length} vendor${quotes.length!==1?'s':''}</span>
+       </div>
+       ${multiCurrency ? `<div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:0.5rem 0.85rem;font-size:0.8rem;color:#92400e;margin-bottom:0.75rem">
+         ⚠ Prices are in mixed currencies (${currencies.join(', ')}) — compare carefully. Indian vendors show prices in INR.
+       </div>` : ''}`
+    : `<div class="status-bar">
+         <div class="pulse"></div>
+         <span>Agents working — <b>${doneCount} of ${data.vendor_count || quotes.length} quotes</b> received so far</span>
+       </div>`;
+
+  // Comparison table
+  const tableRows = quotes.map(q => {
+    const isBest = q.id === bestId;
+    const searching = q.notes === 'searching...';
+    const currLabel = q.currency && q.currency.toLowerCase() !== 'usd'
+      ? ` <span style="font-size:0.72rem;background:#f3f4f6;color:var(--muted);padding:0.1rem 0.35rem;border-radius:4px;vertical-align:middle">${escHtml(q.currency.toUpperCase())}</span>` : '';
+    const priceCell = searching
+      ? `<span style="color:var(--muted);font-size:0.8rem">⏳ searching…</span>`
+      : q.unit_price
+        ? `${isBest ? `<span class="badge-best">Best</span> ` : ''}${escHtml(q.unit_price)}${currLabel}`
+        : `<span style="color:var(--muted)">—</span>`;
+    return `<tr>
+      <td><b>${escHtml(q.vendor_name)}</b></td>
+      <td>${priceCell}</td>
+      <td>${escHtml(q.moq || (searching ? '…' : '—'))}</td>
+      <td>${formatLeadTime(q.lead_time, searching)}</td>
+      <td>${escHtml(q.availability || (searching ? '…' : '—'))}</td>
+      <td>
+        ${q.unit_price
+          ? `<button class="btn btn-sm btn-green" onclick="openRFQ('${q.id}','${escHtml(q.vendor_name)}')">📨 RFQ</button>`
+          : `<span style="color:var(--muted);font-size:0.8rem">${searching ? '' : 'N/A'}</span>`}
+      </td>
+    </tr>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="card-title">📦 ${escHtml(data.product)} <span style="font-weight:400;color:var(--muted);font-size:0.85rem">× ${data.quantity}</span></div>
+    ${statusHtml}
+    ${quotes.length > 0 ? `
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab(this,'tab-table')">📊 Comparison</div>
+        <div class="tab" onclick="switchTab(this,'tab-cards')">🃏 Cards</div>
+      </div>
+      <div id="tab-table">
+        <div style="overflow-x:auto">
+        <table class="compare-table">
+          <thead><tr>
+            <th>Vendor</th><th>Unit Price</th><th>MOQ</th><th>Lead Time</th><th>Availability</th><th>Action</th>
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+        </div>
+      </div>
+      <div id="tab-cards" style="display:none">
+        <div class="quotes-grid">
+          ${quotes.map(q => renderCard(q, q.id === bestId)).join('')}
+        </div>
+      </div>
+    ` : `<div class="empty">Waiting for quotes...</div>`}
+  `;
+}
+
+function renderCard(q, isBest) {
+  const hasPrice = !!q.unit_price;
+  const searching = q.notes === 'searching...';
+  const currBadge = q.currency && q.currency.toLowerCase() !== 'usd'
+    ? ` <span style="font-size:0.72rem;background:#f3f4f6;color:var(--muted);padding:0.15rem 0.4rem;border-radius:4px">${escHtml(q.currency.toUpperCase())}</span>` : '';
+  return `
+    <div class="quote-card ${isBest?'best':''} ${(!hasPrice && !searching)?'error':''}">
+      <div class="q-vendor">${escHtml(q.vendor_name)}</div>
+      ${isBest ? '<div class="q-best">✓ Best Price</div>' : ''}
+      ${searching
+        ? `<div style="color:var(--muted);font-size:0.85rem;padding:0.5rem 0">⏳ Agent browsing site…</div>`
+        : hasPrice
+          ? `<div class="q-price">${escHtml(q.unit_price)}${currBadge}</div>
+             <div class="q-meta">
+               ${q.moq ? `<span>📦 MOQ: ${escHtml(q.moq)}</span>` : ''}
+               ${q.lead_time ? `<span>🚚 ${formatLeadTime(q.lead_time, false)}</span>` : ''}
+               ${q.availability ? `<span>✅ ${escHtml(q.availability)}</span>` : ''}
+             </div>
+             <button class="btn btn-sm btn-green" style="margin-top:0.5rem"
+                     onclick="openRFQ('${q.id}','${escHtml(q.vendor_name)}')">📨 Submit RFQ</button>`
+          : `<div class="q-err">${escHtml(q.notes || 'No price found')}</div>`}
+    </div>`;
+}
+
+function switchTab(el, tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['tab-table','tab-cards'].forEach(id => {
+    const el2 = document.getElementById(id);
+    if (el2) el2.style.display = (id === tabId) ? '' : 'none';
+  });
+}
+
+// ── History ────────────────────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const r = await fetch(`${API}/api/searches`);
+    const data = await r.json();
+    const el = document.getElementById('history-list');
+    if (!data.length) { el.innerHTML = '<div class="empty">No searches yet</div>'; return; }
+    el.innerHTML = data.map(s => `
+      <div class="history-item" onclick="loadSearch('${s.search_id}')">
+        <div>
+          <div class="h-product">${escHtml(s.product)}</div>
+          <div class="h-meta">${s.quote_count} quotes · ${timeAgo(s.created_at)}</div>
+        </div>
+        <span class="badge ${s.status==='running'?'badge-run':'badge-done'}">
+          ${s.status==='running'?'Running':'Done'}
+        </span>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+async function loadSearch(searchId) {
+  currentSearchId = searchId;
+  const data = await fetchSearch(searchId);
+  if (data) {
+    renderResults(data);
+    if (data.status === 'running') pollResults(searchId);
+  }
+}
+
+// ── RFQ Modal ──────────────────────────────────────────────────────────────
+function openRFQ(quoteId, vendorName) {
+  document.getElementById('rfq-quote-id').value = quoteId;
+  document.getElementById('rfq-modal').querySelector('.modal-title').textContent =
+    `📨 Submit RFQ to ${vendorName}`;
+  document.getElementById('rfq-result').innerHTML = '';
+  // Always reset button when opening
+  const btn = document.getElementById('rfq-submit-btn');
+  btn.disabled = false;
+  btn.innerHTML = 'Submit RFQ via Web Agent';
+  document.getElementById('rfq-modal').classList.add('open');
+}
+function closeRFQ() {
+  document.getElementById('rfq-modal').classList.remove('open');
+  // Reset button for next use
+  const btn = document.getElementById('rfq-submit-btn');
+  btn.disabled = false;
+  btn.innerHTML = 'Submit RFQ via Web Agent';
+}
+async function submitRFQ() {
+  const nameVal    = document.getElementById('rfq-name').value.trim();
+  const emailVal   = document.getElementById('rfq-email').value.trim();
+  const companyVal = document.getElementById('rfq-company').value.trim();
+  const resultEl   = document.getElementById('rfq-result');
+
+  if (!nameVal) { resultEl.innerHTML = '<div style="color:var(--red)">⚠ Name is required</div>'; return; }
+  if (!emailVal || !emailVal.includes('@')) { resultEl.innerHTML = '<div style="color:var(--red)">⚠ Valid email is required</div>'; return; }
+  if (!companyVal) { resultEl.innerHTML = '<div style="color:var(--red)">⚠ Company is required</div>'; return; }
+
+  const btn = document.getElementById('rfq-submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '🚀 Queuing RFQ...';
+
+  const payload = {
+    quote_id:     document.getElementById('rfq-quote-id').value,
+    contact_name: nameVal,
+    contact_email: emailVal,
+    company:      companyVal,
+    message:      document.getElementById('rfq-message').value,
+  };
+
+  try {
+    const r = await fetch(`${API}/api/rfq`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) throw new Error(`Server error ${r.status}`);
+    const data = await r.json();
+
+    // Close modal and show toast immediately
+    closeRFQ();
+    showRFQToast(data.rfq_id, data.vendor_url);
+  } catch(e) {
+    document.getElementById('rfq-result').innerHTML =
+      `<div style="color:var(--red)">⚠ ${escHtml(e.message)}</div>`;
+    btn.disabled = false;
+    btn.innerHTML = 'Submit RFQ via Web Agent';
+  }
+}
+
+function showRFQToast(rfqId, vendorUrl) {
+  // Remove existing toast
+  const old = document.getElementById('rfq-toast');
+  if (old) old.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'rfq-toast';
+  toast.style.cssText = `position:fixed;bottom:1.5rem;right:1.5rem;background:white;
+    border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;
+    box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;max-width:320px;font-size:0.85rem;`;
+  toast.innerHTML = `
+    <div style="font-weight:600;margin-bottom:0.4rem">📨 RFQ in progress</div>
+    <div style="color:var(--muted);margin-bottom:0.6rem">Agent is filling the form on <b>${escHtml(vendorUrl.replace(/^https?:\/\/(www\.)?/,'').split('/')[0])}</b>. This takes 2–5 min.</div>
+    <div id="rfq-toast-status" style="display:flex;align-items:center;gap:0.5rem">
+      <div class="pulse" style="width:8px;height:8px"></div>
+      <span style="color:var(--muted)">Agent working…</span>
+    </div>`;
+  document.body.appendChild(toast);
+
+  // Clear any previous RFQ poll
+  if (rfqToastTimer) clearInterval(rfqToastTimer);
+
+  rfqToastTimer = setInterval(async () => {
+    try {
+      const r = await fetch(`${API}/api/rfq/${rfqId}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.status === 'complete') {
+        clearInterval(rfqToastTimer);
+        rfqToastTimer = null;
+        const statusEl = document.getElementById('rfq-toast-status');
+        if (statusEl) {
+          if (d.submitted) {
+            statusEl.innerHTML = `<span style="color:var(--green);font-weight:600">✅ RFQ submitted!${d.confirmation ? ' Ref: ' + escHtml(d.confirmation) : ''}</span>`;
+          } else {
+            statusEl.innerHTML = `<span style="color:var(--red)">⚠ Could not submit: ${escHtml(d.notes || 'Unknown error')}</span>`;
+          }
+        }
+        setTimeout(() => toast.remove(), 8000);
+      }
+    } catch(_) {}
+  }, 4000);
+
+  // Auto-dismiss after agent timeout + buffer
+  setTimeout(() => {
+    if (rfqToastTimer) { clearInterval(rfqToastTimer); rfqToastTimer = null; }
+    toast.remove();
+  }, 240000);  // 4 min
+}
+
+// Detect if lead_time is an absolute date ("Wednesday, March 25") vs a duration ("3-5 days")
+function formatLeadTime(val, searching) {
+  if (searching) return '…';
+  if (!val) return '—';
+  // If it contains a month name or day name, it's a delivery date
+  const datePattern = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+  if (datePattern.test(val)) {
+    return `<span title="Estimated delivery date from vendor">📅 By ${escHtml(val)}</span>`;
+  }
+  return escHtml(val);
+}
+
+function showInlineError(msg) {
+  let el = document.getElementById('search-error');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'search-error';
+    el.className = 'inline-error';
+    document.getElementById('search-btn').insertAdjacentElement('beforebegin', el);
+  }
+  el.textContent = '⚠ ' + msg;
+  el.style.display = '';
+  setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function timeAgo(iso) {
+  // Handle both "2024-01-01T12:00:00" (no tz) and "2024-01-01T12:00:00+00:00"
+  const ts = iso.includes('+') || iso.endsWith('Z') ? iso : iso + 'Z';
+  const d = (Date.now() - new Date(ts).getTime()) / 1000;
+  if (d < 60) return 'just now';
+  if (d < 3600) return Math.floor(d/60) + 'm ago';
+  if (d < 86400) return Math.floor(d/3600) + 'h ago';
+  return Math.floor(d/86400) + 'd ago';
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+loadHistory();
+setInterval(loadHistory, 10000);
+</script>
+</body>
+</html>
