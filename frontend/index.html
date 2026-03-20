@@ -473,7 +473,7 @@ function renderResults(data) {
       <td>
         ${q.unit_price
           ? `<button class="btn btn-sm btn-green" onclick="openRFQ('${q.id}','${escHtml(q.vendor_name)}')">📨 RFQ</button>`
-          : `<span style="color:var(--muted);font-size:0.8rem">${searching ? '' : 'N/A'}</span>`}
+          : searching ? '' : `<span style="color:var(--muted);font-size:0.75rem" title="${escHtml(q.notes || '')}">Not found${q.notes && q.notes !== 'searching...' ? ' ⓘ' : ''}</span>`}
       </td>
     </tr>`;
   }).join('');
